@@ -1,0 +1,278 @@
+/* 
+  PROJECT ENDURANCE — NASA & Interstellar Design System
+  Color Palette: Pitch Black (#030508), Cyan/Event Horizon (#00f0ff), NASA Amber/Alert (#ff6b00), Slate (#f0f4f8)
+*/
+
+@import "tailwindcss";
+
+:root {
+  --bg-pitch: #030508;
+  --color-amber: #ff6b00;
+  --color-cyan: #00f0ff;
+  --color-emerald: #10b981;
+  --color-purple: #a855f7;
+  --font-cinzel: 'Cinzel Decorative', Georgia, serif;
+  --font-garamond: 'Cormorant Garamond', Georgia, serif;
+  --font-mono: 'Space Mono', monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: var(--bg-pitch);
+  color: #f0f4f8;
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  cursor: none; /* Handled by custom HUD Reticle Cursor */
+}
+
+/* Custom Selection */
+::selection {
+  background: rgba(255, 107, 0, 0.3);
+  color: #ffb700;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #030508;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ff6b00;
+}
+
+/* ==========================================================================
+   CUSTOM HUD RETICLE CURSOR
+   ========================================================================== */
+.hud-cursor-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.2s ease;
+}
+
+.cursor-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background-color: #00f0ff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px #00f0ff;
+}
+
+.cursor-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px stroke rgba(0, 240, 255, 0.4);
+  border: 1px dashed rgba(0, 240, 255, 0.6);
+  border-radius: 50%;
+  transition: transform 0.15s ease-out, border-color 0.2s ease;
+  animation: spin-slow 12s linear infinite;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cursor-crosshair {
+  position: absolute;
+  background-color: rgba(0, 240, 255, 0.5);
+}
+.ch-x {
+  top: 50%;
+  left: -4px;
+  width: 44px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.ch-y {
+  left: 50%;
+  top: -4px;
+  height: 44px;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.cursor-readout {
+  position: absolute;
+  top: 40px;
+  left: 20px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #00f0ff;
+  white-space: nowrap;
+  letter-spacing: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(3, 5, 8, 0.85);
+  padding: 2px 5px;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.cursor-target-label {
+  color: #ff6b00;
+  font-weight: bold;
+}
+
+/* Hover State on Interactive Items */
+body.hovering-target .cursor-ring {
+  transform: scale(1.6);
+  border-color: #ff6b00;
+  border-style: solid;
+}
+body.hovering-target .cursor-dot {
+  background-color: #ff6b00;
+  box-shadow: 0 0 15px #ff6b00;
+}
+
+/* ==========================================================================
+   HUD OVERLAY FRAME & CORNER BRACKETS
+   ========================================================================== */
+.hud-scanlines {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.02),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.02)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+  z-index: 45;
+  opacity: 0.7;
+}
+
+.hud-vignette {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 60%, rgba(3, 5, 8, 0.85) 100%);
+  pointer-events: none;
+  z-index: 46;
+}
+
+.hud-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #ff6b00;
+  box-shadow: 0 0 10px #ff6b00;
+}
+
+/* Corner HUD Brackets */
+.hud-corners {
+  position: fixed;
+  inset: 20px;
+  pointer-events: none;
+  z-index: 48;
+}
+
+.corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: rgba(0, 240, 255, 0.4);
+}
+.corner-tl {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+.corner-tr {
+  top: 0;
+  right: 0;
+  border-top: 2px solid;
+  border-right: 2px solid;
+}
+.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid;
+  border-left: 2px solid;
+}
+.corner-br {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+/* Buttons & Interactive Elements */
+.hud-btn {
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   HERO VIDEO SCRUBBING & TYPOGRAPHY
+   ========================================================================== */
+.font-serif {
+  font-family: var(--font-garamond);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+.font-cinzel {
+  font-family: var(--font-cinzel);
+}
+
+/* Hero Sticky Container & Video/Canvas Scrubbing Hardware Acceleration */
+#hero-video-sticky,
+#hero-video-canvas,
+#space-hero-video {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+
+/* Text Split Reveal Utility */
+.word-reveal-span {
+  display: inline-block;
+  opacity: 0.15;
+  filter: blur(4px);
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease;
+  will-change: opacity, filter, transform;
+}
+.word-reveal-span.active {
+  opacity: 1;
+  filter: blur(0px);
+  transform: translateY(0);
+}
+
+/* Mobile Cursor Fallback */
+@media (max-width: 768px) {
+  body {
+    cursor: auto;
+  }
+  .hud-cursor-wrapper {
+    display: none !important;
+  }
+  .hud-corners {
+    inset: 10px;
+  }
+}

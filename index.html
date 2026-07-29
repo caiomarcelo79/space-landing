@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROJECT ENDURANCE // NASA & Event Horizon Telemetry</title>
+  <meta name="description" content="Cinematic one-page space experience inspired by NASA, Interstellar, and Gravity. Scroll-driven video scrubbing, telemetry HUD, and hyperspace visuals.">
+  
+  <!-- Favicon & Theme -->
+  <meta name="theme-color" content="#030508">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23030508' stroke='%23ff6b00' stroke-width='4'/><circle cx='50' cy='50' r='18' fill='%2300f0ff'/></svg>">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,500;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body class="bg-black text-slate-100 overflow-x-hidden selection:bg-amber-500/30 selection:text-amber-200">
+
+  <!-- Custom HUD Reticle Cursor -->
+  <div id="hud-cursor" class="hud-cursor-wrapper" aria-hidden="true">
+    <div class="cursor-dot"></div>
+    <div class="cursor-ring"></div>
+    <div class="cursor-crosshair ch-x"></div>
+    <div class="cursor-crosshair ch-y"></div>
+    <div class="cursor-readout">
+      <span id="cursor-coords">X:000 Y:000</span>
+      <span id="cursor-target" class="cursor-target-label">IDLE</span>
+    </div>
+  </div>
+
+  <!-- Ambient Sound Controls & Audio Warning Modal -->
+  <audio id="ambient-audio" loop preload="auto">
+    <!-- Web Audio API will synthesize ambient space drone if file not present -->
+  </audio>
+
+  <!-- Global HUD Overlay System (Fixed Frame & Corner Brackets) -->
+  <div class="hud-overlay-frame pointer-events-none fixed inset-0 z-50 flex flex-col justify-between p-4 md:p-6 text-xs font-mono text-cyan-500/70 select-none">
+    <!-- Grid & Scanline Background -->
+    <div class="hud-scanlines"></div>
+    <div class="hud-vignette"></div>
+
+    <!-- HUD Top Bar -->
+    <div class="hud-top-bar pointer-events-auto flex items-center justify-between border-b border-cyan-900/40 pb-2 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-xs">
+      <div class="flex items-center gap-3 md:gap-6">
+        <div class="hud-badge flex items-center gap-2 text-amber-500 font-bold tracking-widest">
+          <span class="hud-indicator-dot animate-pulse"></span>
+          <span>NASA // JPL // ENDURANCE-09</span>
+        </div>
+        <div class="hidden sm:block text-slate-400">
+          SYS.STATE: <span class="text-emerald-400">NOMINAL</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="text-slate-300 font-mono">
+          <span class="text-slate-500">UTC:</span> <span id="hud-utc-clock">00:00:00.00</span>
+        </div>
+        <!-- Sound Synthesizer Toggle -->
+        <button id="audio-toggle" class="hud-btn pointer-events-auto px-3 py-1 border border-cyan-500/40 hover:border-amber-500 hover:text-amber-400 transition-all flex items-center gap-2 bg-black/60 text-cyan-400">
+          <svg id="audio-icon-off" class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          <svg id="audio-icon-on" class="w-3.5 h-3.5 fill-current hidden" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <span id="audio-label" class="text-[10px] tracking-wider">AUDIO [OFF]</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- HUD Side Telemetry & Corner Brackets -->
+    <div class="hud-corners pointer-events-none">
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+    </div>
+
+    <!-- Left Side Micro Telemetry -->
+    <div class="hidden lg:flex flex-col gap-8 fixed left-6 top-1/2 -translate-y-1/2 text-[10px] tracking-widest text-slate-500 font-mono z-40">
+      <div>
+        <div class="text-cyan-500/80 mb-1">LATITUDE VECTOR</div>
+        <div class="text-slate-300">04° 12' 44.2" N</div>
+      </div>
+      <div>
+        <div class="text-cyan-500/80 mb-1">LONGITUDE VECTOR</div>
+        <div class="text-slate-300">142° 08' 19.8" E</div>
+      </div>
+      <div>
+        <div class="text-cyan-500/80 mb-1">RELATIVITY DELTA</div>
+        <div class="text-amber-500 font-bold">Δt + 0.0041s</div>
+      </div>
+    </div>
+
+    <!-- Right Side Scroll Progress Gauge -->
+    <div class="hidden lg:flex flex-col items-center gap-3 fixed right-6 top-1/2 -translate-y-1/2 font-mono text-[10px] text-slate-500 z-40">
+      <span class="text-cyan-400 rotate-90 origin-center tracking-widest uppercase mb-6">SCRUB STAGE</span>
+      <div class="w-1 h-32 bg-slate-800 rounded-full overflow-hidden relative border border-cyan-900/50">
+        <div id="hud-scroll-bar" class="w-full bg-gradient-to-b from-amber-500 to-cyan-400 h-0 transition-all duration-75"></div>
+      </div>
+      <span id="hud-scroll-pct" class="text-amber-400 font-bold">0%</span>
+    </div>
+
+    <!-- HUD Bottom Bar -->
+    <div class="hud-bottom-bar pointer-events-auto flex items-center justify-between border-t border-cyan-900/40 pt-2 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-xs">
+      <div class="flex items-center gap-4 text-[11px]">
+        <span class="text-slate-400">MISSION DISTANCE:</span>
+        <span id="hud-distance-readout" class="text-cyan-300 font-bold">0.00 AU</span>
+      </div>
+      <div class="text-amber-500/90 font-mono text-[11px] animate-pulse">
+        [ SYSTEM LINK ACTIVE — GARGANTUA ACCRETION FIELD ]
+      </div>
+    </div>
+  </div>
+
+  <!-- Smooth Scroll Wrapper for Lenis -->
+  <div id="smooth-wrapper" class="relative w-full">
+    <div id="smooth-content" class="relative w-full">
+
+      <!-- SECTION 1: HERO (Scroll-Driven Video Scrubbing) -->
+      <section id="hero" class="relative w-full h-[350vh] bg-black">
+        <!-- Fixed Fullscreen Video Layer -->
+        <div id="hero-video-sticky" class="sticky top-0 left-0 w-full h-screen overflow-hidden z-10 flex items-center justify-center">
+          
+          <!-- Ultra-Smooth Canvas Video Buffer -->
+          <canvas 
+            id="hero-video-canvas" 
+            class="absolute inset-0 w-full h-full object-cover filter brightness-90 contrast-105 scale-105"
+          ></canvas>
+
+          <!-- Hidden Background Video Source with WebM VP9 Fallback & MP4 H.264 Short GOP -->
+          <video 
+            id="space-hero-video" 
+            class="hidden"
+            muted 
+            playsinline 
+            preload="auto"
+          >
+            <source src="/assets/space-hero-opt.webm" type="video/webm">
+            <source src="/assets/space-hero.mp4" type="video/mp4">
+          </video>
+
+          <!-- Dark Gradient Mesh & Radial Vignette over Video -->
+          <div class="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/70 pointer-events-none"></div>
+          <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,5,8,0.85)_100%)] pointer-events-none"></div>
+
+          <!-- Hero Text Overlay & Interactive Content -->
+          <div id="hero-content" class="relative z-20 container mx-auto px-6 text-center max-w-5xl flex flex-col items-center justify-center h-full">
+            
+            <!-- Technical Tag Header -->
+            <div class="hero-tag mb-4 inline-flex items-center gap-3 px-4 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/40 backdrop-blur-md text-cyan-400 font-mono text-xs tracking-widest uppercase">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+              <span>// DEEP SPACE NAVIGATION LOG: 2026.07</span>
+            </div>
+
+            <!-- Main Cinematic Title -->
+            <h1 class="hero-title text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-serif font-black tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-b from-slate-100 via-slate-200 to-slate-500 drop-shadow-[0_10px_35px_rgba(0,240,255,0.25)] my-4">
+              EVENT HORIZON
+            </h1>
+
+            <p class="hero-subtitle text-lg sm:text-xl md:text-2xl font-serif italic text-slate-300 max-w-2xl font-light tracking-wide mb-8">
+              "Mankind was born on Earth. It was never meant to die here."
+            </p>
+
+            <!-- Quick Telemetry HUD Card -->
+            <div class="hero-hud-card grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 p-4 sm:p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-xl max-w-3xl w-full text-left font-mono my-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+              <div class="border-l-2 border-amber-500 pl-3">
+                <div class="text-[10px] text-slate-400">VEHICLE</div>
+                <div class="text-sm font-bold text-slate-100">ENDURANCE</div>
+              </div>
+              <div class="border-l-2 border-cyan-500 pl-3">
+                <div class="text-[10px] text-slate-400">TARGET</div>
+                <div class="text-sm font-bold text-cyan-300">GARGANTUA</div>
+              </div>
+              <div class="border-l-2 border-emerald-500 pl-3">
+                <div class="text-[10px] text-slate-400">THRUST</div>
+                <div id="hero-thrust-val" class="text-sm font-bold text-emerald-400">SCRUBBING</div>
+              </div>
+              <div class="border-l-2 border-purple-500 pl-3">
+                <div class="text-[10px] text-slate-400">RELATIVITY</div>
+                <div class="text-sm font-bold text-purple-300">1:63,000</div>
+              </div>
+            </div>
+
+            <!-- Scroll Prompt CTA -->
+            <div class="hero-scroll-prompt mt-6 flex flex-col items-center gap-2 text-cyan-400 font-mono text-xs tracking-widest">
+              <span>ROTATE SCROLL WHEEL TO SCRUB MISSION VIDEO</span>
+              <div class="w-6 h-10 rounded-full border-2 border-cyan-500/50 flex justify-center p-1">
+                <div class="w-1.5 h-3 bg-amber-500 rounded-full animate-bounce"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: INTRO NARRATIVE (Text Split Reveal & Gravity Well) -->
+      <section id="intro" class="relative z-20 py-32 px-6 bg-gradient-to-b from-black via-slate-950 to-black text-slate-100 border-t border-cyan-900/20">
+        
+        <div class="container mx-auto max-w-5xl">
+          
+          <!-- Section Tag -->
+          <div class="flex items-center gap-4 mb-12">
+            <span class="font-mono text-xs text-amber-500 tracking-widest uppercase border border-amber-500/30 px-3 py-1 rounded bg-amber-950/20">
+              [ 01 // MISSION PHILOSOPHY ]
+            </span>
+            <div class="h-px bg-gradient-to-r from-amber-500/40 to-transparent flex-1"></div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            <!-- Large Split Reveal Narrative Text -->
+            <div class="lg:col-span-8 space-y-8">
+              
+              <h2 id="split-text-heading" class="text-3xl sm:text-5xl md:text-6xl font-serif font-bold text-slate-100 leading-tight">
+                We've always defined ourselves by the ability to overcome the impossible.
+              </h2>
+
+              <div id="split-text-body" class="text-lg sm:text-xl text-slate-300 font-sans leading-relaxed space-y-6 font-light">
+                <p class="reveal-paragraph">
+                  Beyond our solar system lies Gargantua — a supermassive black hole rotating at 99.8% the speed of light. Encircling its abyssal horizon is an extraordinary accretion disk of superheated plasma, bending light into radiant gravitational lenses.
+                </p>
+                <p class="reveal-paragraph">
+                  To navigate this cosmic frontier demands absolute precision. Every millimeter of spatial displacement alters temporal velocity. On Miller's planet, one hour represents seven years of human existence on Earth.
+                </p>
+              </div>
+
+              <!-- Interstellar Quote Card -->
+              <div class="p-6 rounded-xl border border-amber-500/20 bg-amber-950/10 backdrop-blur-md text-amber-200/90 font-serif italic text-lg leading-relaxed relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 text-amber-500/10 font-serif text-8xl select-none font-bold">”</div>
+                "Do not go gentle into that good night. Rage, rage against the dying of the light."
+                <div class="mt-3 font-mono not-italic text-xs text-amber-400/70 font-normal">— Dylan Thomas / Dr. Brand</div>
+              </div>
+
+            </div>
+
+            <!-- Gravity Well Interactive Graphic Canvas -->
+            <div class="lg:col-span-4 flex flex-col items-center justify-center">
+              <div class="relative w-full aspect-square max-w-sm rounded-2xl border border-cyan-500/30 bg-slate-950/80 p-4 flex flex-col items-center justify-center shadow-[0_0_40px_rgba(0,240,255,0.1)]">
+                <!-- SVG HUD Reticle Rings -->
+                <svg class="absolute inset-0 w-full h-full text-cyan-500/20 pointer-events-none" viewBox="0 0 200 200">
+                  <circle cx="100" cy="100" r="90" fill="none" stroke="currentColor" stroke-dasharray="4 4"/>
+                  <circle cx="100" cy="100" r="65" fill="none" stroke="currentColor" stroke-width="0.5"/>
+                  <circle cx="100" cy="100" r="35" fill="none" stroke="currentColor" stroke-dasharray="2 6" stroke-width="1"/>
+                  <line x1="100" y1="0" x2="100" y2="200" stroke="currentColor" stroke-dasharray="2 4"/>
+                  <line x1="0" y1="100" x2="200" y2="100" stroke="currentColor" stroke-dasharray="2 4"/>
+                </svg>
+
+                <canvas id="gravity-canvas" class="relative z-10 w-full h-full rounded-xl cursor-crosshair"></canvas>
+
+                <div class="absolute bottom-6 left-6 right-6 font-mono text-[10px] text-cyan-400/80 flex justify-between border-t border-cyan-900/40 pt-2">
+                  <span>GRAVITY WELL DENS</span>
+                  <span>1.30 × 10¹⁴ KG/M³</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: TELEMETRY & METRICS (Animated Counter Cards) -->
+      <section id="metrics" class="relative z-20 py-32 px-6 bg-black border-t border-cyan-900/30">
+        
+        <!-- Background Grid Graphic -->
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,#081325_1px,transparent_1px),linear-gradient(to_bottom,#081325_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-40 pointer-events-none"></div>
+
+        <div class="container mx-auto max-w-6xl relative z-10">
+          
+          <!-- Section Header -->
+          <div class="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div>
+              <span class="font-mono text-xs text-cyan-400 tracking-widest uppercase border border-cyan-500/30 px-3 py-1 rounded bg-cyan-950/20">
+                [ 02 // MISSION METRICS ]
+              </span>
+              <h2 class="text-3xl sm:text-5xl font-serif font-bold text-slate-100 mt-4">
+                Real-Time Telemetry & Relativity
+              </h2>
+            </div>
+            <p class="font-mono text-xs text-slate-400 max-w-xs">
+              Continuous diagnostic stream synced via Deep Space Network Array 43.
+            </p>
+          </div>
+
+          <!-- 4 High-Tech Telemetry Metric Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            <!-- Metric 1: Distance -->
+            <div class="metric-card group p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-md hover:border-amber-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(255,107,0,0.15)] flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between font-mono text-xs text-slate-400 mb-4">
+                  <span>METRIC // 01</span>
+                  <span class="text-cyan-400">DISTANCE</span>
+                </div>
+                <div class="text-3xl sm:text-4xl font-mono font-bold text-amber-400 tracking-tight my-2">
+                  <span class="counter" data-target="1348920000">0</span>
+                  <span class="text-sm font-normal text-slate-400">KM</span>
+                </div>
+                <p class="text-xs text-slate-400 font-sans mt-2">
+                  Total spatial displacement from Sol System barycenter.
+                </p>
+              </div>
+              <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>TRAJECTORY</span>
+                <span class="text-emerald-400 font-bold">ACCURATE</span>
+              </div>
+            </div>
+
+            <!-- Metric 2: Velocity -->
+            <div class="metric-card group p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-md hover:border-cyan-400/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(0,240,255,0.15)] flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between font-mono text-xs text-slate-400 mb-4">
+                  <span>METRIC // 02</span>
+                  <span class="text-cyan-400">VELOCITY</span>
+                </div>
+                <div class="text-3xl sm:text-4xl font-mono font-bold text-cyan-300 tracking-tight my-2">
+                  <span class="counter" data-target="62450">0</span>
+                  <span class="text-sm font-normal text-slate-400">KM/H</span>
+                </div>
+                <p class="text-xs text-slate-400 font-sans mt-2">
+                  Orbital insertion speed around Gargantua accretion ring.
+                </p>
+              </div>
+              <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>SLIPSTREAM</span>
+                <span class="text-cyan-400 font-bold">0.82 c</span>
+              </div>
+            </div>
+
+            <!-- Metric 3: Time Dilation -->
+            <div class="metric-card group p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-md hover:border-purple-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between font-mono text-xs text-slate-400 mb-4">
+                  <span>METRIC // 03</span>
+                  <span class="text-cyan-400">DILATION</span>
+                </div>
+                <div class="text-3xl sm:text-4xl font-mono font-bold text-purple-300 tracking-tight my-2">
+                  1 HR = <span class="counter" data-target="7.2" data-decimals="1">0</span> YRS
+                </div>
+                <p class="text-xs text-slate-400 font-sans mt-2">
+                  Gravitational time dilation ratio near event horizon.
+                </p>
+              </div>
+              <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>EINSTEIN TENSOR</span>
+                <span class="text-purple-400 font-bold">CRITICAL</span>
+              </div>
+            </div>
+
+            <!-- Metric 4: Hull Integrity -->
+            <div class="metric-card group p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-md hover:border-emerald-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between font-mono text-xs text-slate-400 mb-4">
+                  <span>METRIC // 04</span>
+                  <span class="text-cyan-400">HULL STRESS</span>
+                </div>
+                <div class="text-3xl sm:text-4xl font-mono font-bold text-emerald-400 tracking-tight my-2">
+                  <span class="counter" data-target="99.8" data-decimals="1">0</span>
+                  <span class="text-sm font-normal text-slate-400">%</span>
+                </div>
+                <p class="text-xs text-slate-400 font-sans mt-2">
+                  Endurance structural shield tolerance against tidal forces.
+                </p>
+              </div>
+              <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>SHIELD MATRIX</span>
+                <span class="text-emerald-400 font-bold">STABLE</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 4: MISSION TIMELINE & PARALLAX GALLERY -->
+      <section id="timeline" class="relative z-20 py-32 px-6 bg-gradient-to-b from-black via-slate-950 to-black overflow-hidden border-t border-cyan-900/30">
+        
+        <!-- Floating Parallax Background Elements (Stars, Planet Orbits, HUD Lines) -->
+        <div class="parallax-bg absolute inset-0 pointer-events-none opacity-30">
+          <div class="parallax-layer layer-1 absolute top-20 left-10 w-72 h-72 rounded-full border border-cyan-500/20 bg-cyan-900/10 blur-3xl"></div>
+          <div class="parallax-layer layer-2 absolute bottom-20 right-10 w-96 h-96 rounded-full border border-amber-500/20 bg-amber-900/10 blur-3xl"></div>
+        </div>
+
+        <div class="container mx-auto max-w-5xl relative z-10">
+          
+          <!-- Section Tag -->
+          <div class="flex items-center gap-4 mb-16">
+            <span class="font-mono text-xs text-amber-500 tracking-widest uppercase border border-amber-500/30 px-3 py-1 rounded bg-amber-950/20">
+              [ 03 // MISSION TIMELINE ]
+            </span>
+            <div class="h-px bg-gradient-to-r from-amber-500/40 to-transparent flex-1"></div>
+          </div>
+
+          <h2 class="text-4xl sm:text-6xl font-serif font-bold text-slate-100 mb-16">
+            Chronicles of the Expedition
+          </h2>
+
+          <!-- Vertical Timeline Container -->
+          <div class="relative border-l-2 border-cyan-900/50 ml-4 sm:ml-8 pl-6 sm:pl-12 space-y-24">
+            
+            <!-- Stage 1 -->
+            <div class="timeline-item relative group">
+              <div class="absolute -left-[31px] sm:-left-[55px] top-1 w-5 h-5 rounded-full bg-slate-950 border-2 border-amber-500 group-hover:scale-125 transition-transform flex items-center justify-center">
+                <div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+              </div>
+              <div class="font-mono text-xs text-amber-400 mb-1">PHASE I // T+ 00:00:00</div>
+              <h3 class="text-2xl sm:text-3xl font-serif font-bold text-slate-100 mb-3">Atmospheric Escape & Saturn Alignment</h3>
+              <p class="text-slate-300 text-base leading-relaxed max-w-2xl font-light">
+                Liftoff from Cape Canaveral aboard Saturn V-derived launch architecture. Endurance docks with heavy booster modules to initiate a two-year gravitational trajectory toward Saturn.
+              </p>
+            </div>
+
+            <!-- Stage 2 -->
+            <div class="timeline-item relative group">
+              <div class="absolute -left-[31px] sm:-left-[55px] top-1 w-5 h-5 rounded-full bg-slate-950 border-2 border-cyan-500 group-hover:scale-125 transition-transform flex items-center justify-center">
+                <div class="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+              </div>
+              <div class="font-mono text-xs text-cyan-400 mb-1">PHASE II // T+ 24:14:02</div>
+              <h3 class="text-2xl sm:text-3xl font-serif font-bold text-slate-100 mb-3">Wormhole Spatial Fold Insertion</h3>
+              <p class="text-slate-300 text-base leading-relaxed max-w-2xl font-light">
+                Entry into the spherical gravitational anomaly orbiting Saturn. The spatial distortion folds four-dimensional space, bridging Sol System directly into the Gargantua sector.
+              </p>
+            </div>
+
+            <!-- Stage 3 -->
+            <div class="timeline-item relative group">
+              <div class="absolute -left-[31px] sm:-left-[55px] top-1 w-5 h-5 rounded-full bg-slate-950 border-2 border-purple-500 group-hover:scale-125 transition-transform flex items-center justify-center">
+                <div class="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+              </div>
+              <div class="font-mono text-xs text-purple-400 mb-1">PHASE III // T+ 48:09:12</div>
+              <h3 class="text-2xl sm:text-3xl font-serif font-bold text-slate-100 mb-3">Gargantua Accretion Disk Slingshot</h3>
+              <p class="text-slate-300 text-base leading-relaxed max-w-2xl font-light">
+                Executing high-velocity orbital maneuvers along the photon sphere of Gargantua. Time dilation scales exponentially as tidal gravitational force approaches maximum structural limits.
+              </p>
+            </div>
+
+            <!-- Stage 4 -->
+            <div class="timeline-item relative group">
+              <div class="absolute -left-[31px] sm:-left-[55px] top-1 w-5 h-5 rounded-full bg-slate-950 border-2 border-emerald-500 group-hover:scale-125 transition-transform flex items-center justify-center">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+              </div>
+              <div class="font-mono text-xs text-emerald-400 mb-1">PHASE IV // T+ 72:00:00</div>
+              <h3 class="text-2xl sm:text-3xl font-serif font-bold text-slate-100 mb-3">Singularity Data Transmission</h3>
+              <p class="text-slate-300 text-base leading-relaxed max-w-2xl font-light">
+                Deployment of quantum probe payload into the black hole horizon to record quantum gravity equations necessary for mankind's exodus from Earth.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 5: SINGULARITY & HYPERSPACE CTA (Interactive Canvas Warp) -->
+      <section id="cta" class="relative z-20 min-h-screen py-32 px-6 bg-black flex items-center justify-center border-t border-cyan-900/30 overflow-hidden">
+        
+        <!-- Canvas Warp Speed Starfield Background -->
+        <canvas id="warp-canvas" class="absolute inset-0 w-full h-full z-0 cursor-pointer"></canvas>
+
+        <!-- Dark Radial Mask over Canvas -->
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,5,8,0.9)_80%)] pointer-events-none z-10"></div>
+
+        <div class="container mx-auto max-w-3xl relative z-20 text-center">
+          
+          <!-- Section Tag -->
+          <div class="inline-flex items-center gap-3 px-4 py-1.5 rounded-full border border-amber-500/40 bg-amber-950/30 text-amber-400 font-mono text-xs tracking-widest uppercase mb-8">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span>[ 04 // DEEP SPACE PAYLOAD TRANSMISSION ]</span>
+          </div>
+
+          <h2 class="text-4xl sm:text-6xl md:text-7xl font-serif font-black text-slate-100 tracking-tight leading-none mb-6 drop-shadow-[0_10px_30px_rgba(255,107,0,0.3)]">
+            INITIATE TRANSMISSION
+          </h2>
+
+          <p class="text-slate-300 font-sans text-lg sm:text-xl max-w-xl mx-auto font-light mb-10">
+            Join the expedition. Transmit your telemetry packet directly to NASA Deep Space Network Array 43.
+          </p>
+
+          <!-- Interactive Terminal Form Box -->
+          <form id="telemetry-form" class="max-w-xl mx-auto p-6 rounded-2xl border border-cyan-500/30 bg-slate-950/80 backdrop-blur-xl font-mono text-left space-y-4 shadow-[0_0_50px_rgba(0,240,255,0.15)]">
+            
+            <div class="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2">
+              <span class="text-cyan-400">// TERMINAL ID: JPL-DSN-43</span>
+              <span class="text-amber-500">READY</span>
+            </div>
+
+            <div>
+              <label for="commander-name" class="block text-[11px] text-slate-400 mb-1">COMMANDER CALLSIGN</label>
+              <input 
+                type="text" 
+                id="commander-name" 
+                required 
+                placeholder="e.g. JOSEPH COOPER" 
+                class="w-full px-4 py-3 rounded-lg border border-cyan-900/60 bg-black/80 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors text-sm"
+              >
+            </div>
+
+            <div>
+              <label for="telemetry-payload" class="block text-[11px] text-slate-400 mb-1">TELEMETRY MESSAGE PAYLOAD</label>
+              <textarea 
+                id="telemetry-payload" 
+                rows="3" 
+                required 
+                placeholder="Enter quantum gravity telemetry notes or message..." 
+                class="w-full px-4 py-3 rounded-lg border border-cyan-900/60 bg-black/80 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors text-sm resize-none"
+              ></textarea>
+            </div>
+
+            <button 
+              type="submit" 
+              id="transmit-btn" 
+              class="w-full py-4 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-orange-500 text-black font-bold tracking-widest text-sm uppercase transition-all duration-300 transform active:scale-98 shadow-[0_0_25px_rgba(255,107,0,0.4)] flex items-center justify-center gap-3 cursor-pointer"
+            >
+              <span>[ TRANSMIT TELEMETRY SIGNAL ]</span>
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+
+            <!-- Output Console Log -->
+            <div id="terminal-output" class="hidden mt-4 p-3 rounded bg-black/90 border border-emerald-500/40 text-emerald-400 text-xs font-mono space-y-1">
+              <div>> ENCRYPTING PAYLOAD WITH QUANTUM KEY...</div>
+              <div>> TRANSMITTING VIA SATURN WORMHOLE RELAY...</div>
+              <div id="transmission-status" class="font-bold text-amber-400">> STATUS: SIGNAL ACKNOWLEDGED BY JPL</div>
+            </div>
+
+          </form>
+
+        </div>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="relative z-20 py-12 px-6 bg-black border-t border-slate-900 text-slate-500 font-mono text-xs">
+        <div class="container mx-auto max-w-6xl flex flex-col md:flex-row items-center justify-between gap-6">
+          <div class="flex items-center gap-4">
+            <span class="text-amber-500 font-bold tracking-widest">NASA // PROJECT ENDURANCE</span>
+            <span>•</span>
+            <span>EVENT HORIZON EXPEDITION</span>
+          </div>
+          <div class="text-center md:text-right space-y-1">
+            <div>BUILT WITH GSAP 3, SCROLLTRIGGER & LENIS SMOOTH SCROLL</div>
+            <div class="text-slate-600">INSPIRED BY INTERSTELLAR & GRAVITY VISUAL ESTHETICS</div>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
