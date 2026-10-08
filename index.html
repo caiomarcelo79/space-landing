@@ -121,13 +121,15 @@
         <!-- Fixed Fullscreen Video Layer -->
         <div id="hero-video-sticky" class="sticky top-0 left-0 w-full h-screen overflow-hidden z-10 flex items-center justify-center">
           
-          <!-- Ultra-Smooth Canvas Video Buffer -->
+          <!-- Ultra-Smooth Canvas Video Buffer. The brightness/contrast grade is baked
+               into the encoded pixels, so no runtime CSS filter is needed here. -->
           <canvas 
             id="hero-video-canvas" 
-            class="absolute inset-0 w-full h-full object-cover filter brightness-90 contrast-105 scale-105"
+            class="absolute inset-0 w-full h-full"
           ></canvas>
 
-          <!-- Hidden Background Video Source with WebM VP9 Fallback & MP4 H.264 Short GOP -->
+          <!-- Hidden Background Video Source. Both encodes share an identical
+               10.00s duration so the scrub mapping is browser-consistent. -->
           <video 
             id="space-hero-video" 
             class="hidden"
@@ -135,7 +137,7 @@
             playsinline 
             preload="auto"
           >
-            <source src="/assets/space-hero-opt.webm" type="video/webm">
+            <source src="/assets/space-hero.webm" type="video/webm">
             <source src="/assets/space-hero.mp4" type="video/mp4">
           </video>
 
@@ -147,7 +149,10 @@
           <div id="hero-content" class="relative z-20 container mx-auto px-6 text-center max-w-5xl flex flex-col items-center justify-center h-full">
             
             <!-- Technical Tag Header -->
-            <div class="hero-tag mb-4 inline-flex items-center gap-3 px-4 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/40 backdrop-blur-md text-cyan-400 font-mono text-xs tracking-widest uppercase">
+            <!-- Solid translucent fill instead of backdrop-blur: this sits directly
+                 over the video canvas, so a backdrop filter here would force a full
+                 re-blur of the backdrop on every redrawn frame. -->
+            <div class="hero-tag mb-4 inline-flex items-center gap-3 px-4 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/80 text-cyan-400 font-mono text-xs tracking-widest uppercase">
               <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
               <span>// DEEP SPACE NAVIGATION LOG: 2026.07</span>
             </div>
@@ -162,7 +167,8 @@
             </p>
 
             <!-- Quick Telemetry HUD Card -->
-            <div class="hero-hud-card grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 p-4 sm:p-6 rounded-xl border border-cyan-500/20 bg-slate-950/60 backdrop-blur-xl max-w-3xl w-full text-left font-mono my-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <!-- Same rationale as .hero-tag: no backdrop-blur over the animating canvas. -->
+            <div class="hero-hud-card grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 p-4 sm:p-6 rounded-xl border border-cyan-500/20 bg-slate-950/85 max-w-3xl w-full text-left font-mono my-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
               <div class="border-l-2 border-amber-500 pl-3">
                 <div class="text-[10px] text-slate-400">VEHICLE</div>
                 <div class="text-sm font-bold text-slate-100">ENDURANCE</div>

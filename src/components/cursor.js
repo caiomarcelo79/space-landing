@@ -2,6 +2,8 @@
  * Custom HUD Reticle Cursor
  * Tracks mouse position, computes HUD coordinates, and locks onto interactive targets.
  */
+import { createRenderGate } from './renderGate.js';
+
 export function initHudCursor() {
   const cursorWrapper = document.getElementById('hud-cursor');
   const coordsLabel = document.getElementById('cursor-coords');
@@ -9,32 +11,42 @@ export function initHudCursor() {
 
   if (!cursorWrapper) return;
 
+  // Touch/coarse pointers have no reticle to follow.
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    cursorWrapper.style.display = 'none';
+    return;
+  }
+
   let posX = window.innerWidth / 2;
   let posY = window.innerHeight / 2;
   let mouseX = posX;
   let mouseY = posY;
+  let lastCoordText = '';
 
   // Track mouse movement
   window.addEventListener('mousemove', (e) => {
     mouseX = e.clientX;
     mouseY = e.clientY;
+  }, { passive: true });
 
-    if (coordsLabel) {
-      const padX = String(Math.round(mouseX)).padStart(4, '0');
-      const padY = String(Math.round(mouseY)).padStart(4, '0');
-      coordsLabel.textContent = `X:${padX} Y:${padY}`;
-    }
-  });
-
-  // Smooth lerp for cursor motion
   function render() {
     posX += (mouseX - posX) * 0.25;
     posY += (mouseY - posY) * 0.25;
 
-    cursorWrapper.style.transform = `translate3d(${posX}px, ${posY}px, 0) translate(-50%, -50%)`;
-    requestAnimationFrame(render);
+    cursorWrapper.style.transform = `translate3d(${posX.toFixed(1)}px, ${posY.toFixed(1)}px, 0) translate(-50%, -50%)`;
+
+    // Round before comparing: the readout shows integers, so writing on every
+    // raw sub-pixel move only produced redundant layout work.
+    if (coordsLabel) {
+      const text = `X:${String(Math.round(mouseX)).padStart(4, '0')} Y:${String(Math.round(mouseY)).padStart(4, '0')}`;
+      if (text !== lastCoordText) {
+        lastCoordText = text;
+        coordsLabel.textContent = text;
+      }
+    }
   }
-  requestAnimationFrame(render);
+
+  createRenderGate(cursorWrapper, render);
 
   // Target acquisition on interactive elements
   const targetElements = document.querySelectorAll('a, button, input, textarea, .metric-card, .timeline-item');

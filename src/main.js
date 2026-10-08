@@ -11,9 +11,10 @@ gsap.registerPlugin(ScrollTrigger);
 
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Lenis Smooth Scroll
+  // lerp responds immediately; the previous duration:1.2 + exponential easing
+  // stacked two easing passes and read as sluggish rather than smooth.
   const lenis = new Lenis({
-    duration: 1.2,
-    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+    lerp: 0.12,
     smoothWheel: true,
     touchMultiplier: 2,
   });
@@ -24,7 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     lenis.raf(time * 1000);
   });
 
-  gsap.ticker.lagSmoothing(0);
+  // NOTE: lagSmoothing is intentionally left at its GSAP default. Disabling it
+  // let a single slow frame jump the whole timeline, which is what produced the
+  // "stuck" feel while scrubbing.
 
   // 2. Initialize Interactive HUD Modules
   initHudCursor();
@@ -33,17 +36,29 @@ document.addEventListener('DOMContentLoaded', () => {
   initGravityCanvas();
 
   // 3. UTC Live Clock Ticker
+  // Throttled to ~10fps on the shared GSAP ticker and guarded against redundant
+  // writes; the previous setInterval(40ms) forced 25 style recalcs per second
+  // inside a fixed HUD for the entire page lifetime.
   const utcClock = document.getElementById('hud-utc-clock');
-  function updateClock() {
-    if (!utcClock) return;
+  let clockElapsed = 0;
+  let lastClockText = '';
+  gsap.ticker.add((time, deltaTime) => {
+    clockElapsed += deltaTime * 1000;
+    if (clockElapsed < 100 || !utcClock) return;
+    clockElapsed = 0;
+
     const now = new Date();
     const hrs = String(now.getUTCHours()).padStart(2, '0');
     const mins = String(now.getUTCMinutes()).padStart(2, '0');
     const secs = String(now.getUTCSeconds()).padStart(2, '0');
     const ms = String(Math.floor(now.getUTCMilliseconds() / 10)).padStart(2, '0');
-    utcClock.textContent = `${hrs}:${mins}:${secs}.${ms}`;
-  }
-  setInterval(updateClock, 40);
+    const text = `${hrs}:${mins}:${secs}.${ms}`;
+
+    if (text !== lastClockText) {
+      utcClock.textContent = text;
+      lastClockText = text;
+    }
+  });
 
   // 4. DEFINITIVE SOLUTION: Optimized Canvas & Video Scroll-Scrubbing Engine
   const video = document.getElementById('space-hero-video');
@@ -52,103 +67,84 @@ document.addEventListener('DOMContentLoaded', () => {
   if (video && canvas) {
     const ctx = canvas.getContext('2d', { alpha: false });
 
-    // Resize canvas to match screen resolution and video aspect ratio
+    // Match the canvas backing store to the CSS box in device pixels so the
+    // frame is rasterised once at native density instead of being upscaled.
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(window.innerWidth * dpr);
+      canvas.height = Math.round(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawCurrentFrame();
     };
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', resizeCanvas, { passive: true });
 
     video.pause();
 
     let targetVideoTime = 0;
     let currentVideoTime = 0;
-    let isSeeking = false;
     let pendingSeek = false;
+    let isHeroVisible = false;
+    let lastDrawnTime = -1;
 
-    // Offscreen Frame Buffer for Fast Scroll Fallback (Pre-decoded RAM Cache)
-    const NUM_CACHED_FRAMES = 80;
-    const frameCache = new Array(NUM_CACHED_FRAMES);
-
-    // Draw current frame (either live video or cached ImageBitmap) onto Canvas
+    // Single draw path. Previously this ran from the rAF loop, a recursive
+    // requestVideoFrameCallback, and timeupdate/seeking/seeked all at once,
+    // producing up to three full-viewport uploads for the same frame.
     function drawCurrentFrame() {
-      if (!canvas.width || !canvas.height) return;
+      if (!canvas.width || !canvas.height || video.readyState < 2) return;
 
-      const duration = video.duration || 10;
-      const progress = Math.min(Math.max(currentVideoTime / duration, 0), 1);
-      const cacheIdx = Math.min(Math.floor(progress * NUM_CACHED_FRAMES), NUM_CACHED_FRAMES - 1);
+      // Redraw only when the source frame actually moved.
+      if (video.currentTime === lastDrawnTime) return;
+      lastDrawnTime = video.currentTime;
 
-      // Determine active media source (prefer cached ImageBitmap when seeking)
-      const cachedBmp = frameCache[cacheIdx];
-      const media = (isSeeking && cachedBmp) ? cachedBmp : (video.readyState >= 2 ? video : cachedBmp);
-      if (!media) return;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return;
 
-      // Extract native dimensions
-      const mediaW = media.width || video.videoWidth || 1280;
-      const mediaH = media.height || video.videoHeight || 720;
-
-      const vRatio = mediaW / mediaH;
-      const cRatio = canvas.width / canvas.height;
-      let dw = canvas.width;
-      let dh = canvas.height;
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+      const vRatio = vw / vh;
+      const cRatio = viewW / viewH;
+      let dw = viewW;
+      let dh = viewH;
       let dx = 0;
       let dy = 0;
 
       if (cRatio > vRatio) {
-        dh = canvas.width / vRatio;
-        dy = (canvas.height - dh) / 2;
+        dh = viewW / vRatio;
+        dy = (viewH - dh) / 2;
       } else {
-        dw = canvas.height * vRatio;
-        dx = (canvas.width - dw) / 2;
+        dw = viewH * vRatio;
+        dx = (viewW - dw) / 2;
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(media, dx, dy, dw, dh);
+      // Slight overscan replaces the old CSS scale-105 filter pass. The context
+      // is opaque, so drawImage covering the box needs no clearRect.
+      const overscan = 1.05;
+      dw *= overscan;
+      dh *= overscan;
+      dx -= (dw - viewW) / 2;
+      dy -= (dh - viewH) / 2;
 
-      // Cache frame to RAM asynchronously for future fast scrolls
-      if (!frameCache[cacheIdx] && video.readyState >= 2 && window.createImageBitmap) {
-        createImageBitmap(video).then((bmp) => {
-          frameCache[cacheIdx] = bmp;
-        }).catch(() => {});
+      ctx.drawImage(video, dx, dy, dw, dh);
+    }
+
+    function requestSeek() {
+      if (video.duration && !video.seeking) {
+        // fastSeek snapped to keyframes and could land on a visibly wrong
+        // frame; the encodes carry a short GOP so an exact seek is cheap.
+        video.currentTime = currentVideoTime;
+      } else {
+        pendingSeek = true;
       }
     }
 
-    // Video frame callback for zero-latency frame drawing when browser presents frame
-    const registerVideoFrameCallback = () => {
-      if ('requestVideoFrameCallback' in video) {
-        video.requestVideoFrameCallback(() => {
-          drawCurrentFrame();
-          registerVideoFrameCallback();
-        });
-      }
-    };
-
-    video.addEventListener('seeking', () => { 
-      isSeeking = true; 
-      drawCurrentFrame();
-    });
-    video.addEventListener('seeked', () => { 
-      isSeeking = false; 
+    video.addEventListener('seeked', () => {
       drawCurrentFrame();
       if (pendingSeek) {
         pendingSeek = false;
         requestSeek();
       }
     });
-    video.addEventListener('timeupdate', drawCurrentFrame);
-
-    function requestSeek() {
-      if (video.duration && !video.seeking) {
-        if ('fastSeek' in video) {
-          video.fastSeek(currentVideoTime);
-        } else {
-          video.currentTime = currentVideoTime;
-        }
-      } else {
-        pendingSeek = true;
-      }
-    }
 
     let initializedScrubbing = false;
 
@@ -157,7 +153,13 @@ document.addEventListener('DOMContentLoaded', () => {
       initializedScrubbing = true;
 
       resizeCanvas();
-      registerVideoFrameCallback();
+
+      // Cache the HUD nodes once instead of querying the DOM on every scroll tick.
+      const scrollBar = document.getElementById('hud-scroll-bar');
+      const scrollPct = document.getElementById('hud-scroll-pct');
+      const distReadout = document.getElementById('hud-distance-readout');
+      let lastPct = -1;
+      let lastDist = '';
 
       // ScrollTrigger captures target time on scroll update with smoothed scrub easing
       ScrollTrigger.create({
@@ -170,43 +172,61 @@ document.addEventListener('DOMContentLoaded', () => {
             targetVideoTime = self.progress * (video.duration - 0.05);
           }
 
-          // Update HUD gauge & distance
+          // Update HUD gauge & distance, skipping redundant style writes
           const pct = Math.round(self.progress * 100);
-          const scrollBar = document.getElementById('hud-scroll-bar');
-          const scrollPct = document.getElementById('hud-scroll-pct');
-          const distReadout = document.getElementById('hud-distance-readout');
+          if (pct !== lastPct) {
+            lastPct = pct;
+            if (scrollBar) scrollBar.style.height = `${pct}%`;
+            if (scrollPct) scrollPct.textContent = `${pct}%`;
+          }
 
-          if (scrollBar) scrollBar.style.height = `${pct}%`;
-          if (scrollPct) scrollPct.textContent = `${pct}%`;
           if (distReadout) {
-            const dist = (self.progress * 14.85).toFixed(2);
-            distReadout.textContent = `${dist} AU`;
+            const dist = `${(self.progress * 14.85).toFixed(2)} AU`;
+            if (dist !== lastDist) {
+              lastDist = dist;
+              distReadout.textContent = dist;
+            }
           }
         }
       });
 
-      // Smooth RAF Lerp loop with debounced frame seeking
+      // Smooth RAF Lerp loop with throttled frame seeking.
+      // Driven from the GSAP ticker so it shares one rAF with Lenis, and
+      // suspended entirely while the hero is off-screen.
       let lastSeekTime = 0;
-      function smoothVideoLoop() {
-        if (video.duration) {
-          const delta = targetVideoTime - currentVideoTime;
+      gsap.ticker.add((time) => {
+        if (!isHeroVisible || !video.duration) return;
 
-          if (Math.abs(delta) > 0.001) {
-            const lerpFactor = Math.abs(delta) > 1.2 ? 0.35 : 0.25;
-            currentVideoTime += delta * lerpFactor;
+        const delta = targetVideoTime - currentVideoTime;
 
-            const now = performance.now();
-            // Throttle seeks to at most once per 16ms to avoid seek thrashing
-            if (now - lastSeekTime > 16 && Math.abs(currentVideoTime - video.currentTime) > 0.01) {
-              lastSeekTime = now;
-              requestSeek();
-            }
+        if (Math.abs(delta) > 0.001) {
+          const lerpFactor = Math.abs(delta) > 1.2 ? 0.35 : 0.25;
+          currentVideoTime += delta * lerpFactor;
+
+          const now = performance.now();
+          // Throttle seeks to ~30ms. The old 16ms cap queued seeks faster than
+          // the decoder could service them, which is what caused the visible
+          // stutter on fast scrolls.
+          if (now - lastSeekTime > 33 && Math.abs(currentVideoTime - video.currentTime) > 0.01) {
+            lastSeekTime = now;
+            requestSeek();
           }
-          drawCurrentFrame();
         }
-        requestAnimationFrame(smoothVideoLoop);
+        drawCurrentFrame();
+      });
+
+      // Only run the scrub loop while the hero section is on screen.
+      const heroEl = document.getElementById('hero');
+      if (heroEl && 'IntersectionObserver' in window) {
+        new IntersectionObserver(
+          ([entry]) => {
+            isHeroVisible = entry.isIntersecting;
+          },
+          { rootMargin: '100px 0px' }
+        ).observe(heroEl);
+      } else {
+        isHeroVisible = true;
       }
-      requestAnimationFrame(smoothVideoLoop);
 
       // Hero Content Fade & Scale on Scroll Exit
       gsap.to('#hero-content', {
@@ -238,42 +258,46 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 5. Text Split Reveal for Section 2 (Intro)
+  // Animating `className` cannot be composited, so every scrub tick forced a
+  // style/layout recalculation across all 76 spans. Animating opacity/y writes
+  // inline transforms instead, which stays on the compositor. The soft blur
+  // comes from CSS and is only present until each word settles.
+  const revealWords = (target, trigger, stagger, start, end) => {
+    const spans = target.querySelectorAll('.word-reveal-span');
+    if (!spans.length) return;
+
+    gsap.to(spans, {
+      opacity: 1,
+      y: 0,
+      filter: 'blur(0px)',
+      ease: 'none',
+      stagger,
+      scrollTrigger: {
+        trigger,
+        start,
+        end,
+        scrub: 0.8,
+      },
+    });
+  };
+
   const splitHeading = document.getElementById('split-text-heading');
   if (splitHeading) {
-    const text = splitHeading.innerText;
-    splitHeading.innerHTML = text
+    splitHeading.innerHTML = splitHeading.innerText
       .split(' ')
       .map((word) => `<span class="word-reveal-span">${word}</span>`)
       .join(' ');
 
-    gsap.to('#split-text-heading .word-reveal-span', {
-      scrollTrigger: {
-        trigger: '#split-text-heading',
-        start: 'top 80%',
-        end: 'bottom 40%',
-        scrub: 0.8
-      },
-      className: 'word-reveal-span active',
-      stagger: 0.1
-    });
+    revealWords(splitHeading, '#split-text-heading', 0.1, 'top 80%', 'bottom 40%');
   }
 
-  // Reveal paragraph text
-  const paragraphs = document.querySelectorAll('.reveal-paragraph');
-  paragraphs.forEach((p) => {
-    const words = p.innerText.split(' ');
-    p.innerHTML = words.map((w) => `<span class="word-reveal-span">${w}</span>`).join(' ');
+  document.querySelectorAll('.reveal-paragraph').forEach((p) => {
+    p.innerHTML = p.innerText
+      .split(' ')
+      .map((w) => `<span class="word-reveal-span">${w}</span>`)
+      .join(' ');
 
-    gsap.to(p.querySelectorAll('.word-reveal-span'), {
-      scrollTrigger: {
-        trigger: p,
-        start: 'top 85%',
-        end: 'bottom 45%',
-        scrub: 0.8
-      },
-      className: 'word-reveal-span active',
-      stagger: 0.05
-    });
+    revealWords(p, p, 0.05, 'top 85%', 'bottom 45%');
   });
 
   // 6. Metrics Animated Counters

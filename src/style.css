@@ -239,29 +239,37 @@ body.hovering-target .cursor-dot {
   font-family: var(--font-cinzel);
 }
 
-/* Hero Sticky Container & Video/Canvas Scrubbing Hardware Acceleration */
-#hero-video-sticky,
-#hero-video-canvas,
-#space-hero-video {
-  transform: translateZ(0);
-  backface-visibility: hidden;
+/* Hero Sticky Container & Video/Canvas Scrubbing Hardware Acceleration
+   will-change is scoped to the visible layers only. It used to sit on the
+   hidden <video> too, which is never painted and only wasted memory. */
+#hero-video-sticky {
+  contain: paint;
   will-change: transform;
 }
 
+#hero-video-canvas {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
 
-/* Text Split Reveal Utility */
+
+/* Text Split Reveal Utility
+   GSAP animates opacity/y/filter directly (inline styles), so no transition is
+   declared here. will-change is intentionally omitted on the spans: declaring
+   it per-span promoted all 76 of them to permanent compositing layers, which
+   cost more than the effect saved. */
+#split-text-heading,
+#split-text-body {
+  will-change: opacity;
+}
+
 .word-reveal-span {
   display: inline-block;
   opacity: 0.15;
-  filter: blur(4px);
+  /* Lighter than the original 4px: keeps the focus-pull read while cutting the
+     blur cost, and GSAP animates filter straight to 0px. */
+  filter: blur(1.5px);
   transform: translateY(8px);
-  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease;
-  will-change: opacity, filter, transform;
-}
-.word-reveal-span.active {
-  opacity: 1;
-  filter: blur(0px);
-  transform: translateY(0);
 }
 
 /* Mobile Cursor Fallback */

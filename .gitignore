@@ -42,6 +42,10 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Local backup of original media assets (pre-optimization).
+# Kept out of git: the originals are already recoverable from history.
+_backup/
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 
